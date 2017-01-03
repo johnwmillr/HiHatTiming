@@ -1,1 +1,1 @@
-# HiHatTiming
+This code represents my attempt to recreate some of the analysis in an intriguing paper from [Räsänen et al.](http://journals.plos.org/plosone/article?id=10.1371/journal.pone.0127902)
