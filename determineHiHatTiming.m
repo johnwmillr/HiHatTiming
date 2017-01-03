@@ -7,84 +7,26 @@
 % "Fluctuations of hi-hat timing and dynamics in a virtuoso drum track of a popular music recording."
 % Rasanen et al., 2015
 
-%% Load the data
-pathToData = go('down');
-filename = '03 Dean Town.mp3';
-% filename = 'Michael McDonald  -  I Keep Forgettin''.mp3';
-% filename = '1-19 Human Nature.mp3';
-% filename = '01 Giant Steps.mp3';
-% filename = '04 Golden Lady.mp3';
-[y,fs] = audioread([pathToData filesep filename]);
-y = mean(y,2); % Make it mono
-t = maketime(y,fs);
+%% Load a song
+pathToFile = fullfile(go('down'),'03 Dean Town.mp3');
+[y,fs,t] = loadAudio(pathToFile);
 
-%% Listen
-audio = audioplayer(y,fs);
-play(audio), pause(5), stop(audio)
+%% Filter the audio
+% Playing around with the cutoff frequency seems to improve detection quite a bit
+yHiPass = jfilt(y,fs,'high',4000);
 
-%% Visualize
+% Visualize the filtered audio
 mask = and(t>=46,t<=90);
-win_len = round(0.005*length(y(mask)));
-figure(3), spectrogram(y(mask),win_len,round(0.01*win_len),[],fs,'yaxis'), ylim([250 16e3])
+win_len = round(0.001*length(yHiPass(mask))); figure(3)
+spectrogram(yHiPass(mask),win_len,round(0.01*win_len),[],fs,'yaxis')
 set(gca,'yscale','log')
 
-audio = audioplayer(y(find(mask==1,1,'first'):end),fs);
-play(audio), pause(5), stop(audio)
-
-%% Filter
-cutoff = 4000; % Playing around with the cutoff frequency seems to improve detection quite a bit
-
-yHiPass = jfilt(y,fs,'high',cutoff);
-
-% 
-% Wn = cutoff/(fs/2);
-% [bb,aa] = butter(50,Wn,'high');
-% yHiPass = submean(normalize(filtfilt(bb,aa,y),mm(y)));
-
-% Re-visualize
-mask = and(t>=46,t<=90);
-win_len = round(0.001*length(yHiPass(mask)));
-figure(3)
-spectrogram(yHiPass(mask),win_len,round(0.01*win_len),[],fs,'yaxis'), %ylim([250 17e3])
-set(gca,'yscale','log')
-
+% Listen to the filtered audio
 audio = audioplayer(yHiPass(mask),fs);
 stop(audio), play(audio)
 
 %% Threshold detection
-yfilt = abs(yHiPass);
-yfilt = detrend(lopass(abs(dif2(yfilt)),fs,25));
-% [bb,aa] = butter(20,500/(fs/2),'high');
-% yfilt = filtfilt(bb,aa,yfilt);
-[mew, sig] = deal(mean(yfilt), std(yfilt));
-threshold = 0.02*sig; % Signal must be n_ standard deviations above the mean
-dead_time_after_negative_crossing = 0.001; % s
-% threshold = 1.25*sig; % Signal must be n_ standard deviations above the mean
-% dead_time_after_negative_crossing = 0.025; % s
-
-    % Visualize
-figure(11), hold off
-plot(t(mask),yfilt(mask)), xlabel('Time (s)','fontsize',FS), hold on
-line(xlim,threshold*[1 1],'color','r','linewidth',2)
-
-% Threshold crossings
-over_threshold = yfilt > threshold;
-threshold_crossings = [0; diff(over_threshold)];
-
-    % The indices where the data crossed from below to above the threshold
-pos_idxs = find(threshold_crossings == 1);
-neg_idxs = find(threshold_crossings == -1);
-
-    % Number of indicies to skip over after a negative crossing
-blanked_idxs = bsxfun(@plus,neg_idxs,0:(round(dead_time_after_negative_crossing*fs)));
-    % Include the positive crossings that didn't come too soon after a negative crossing
-good_idxs = setdiff(pos_idxs,blanked_idxs);
-
-plot(t(pos_idxs),threshold,'rx')
-plot(t(neg_idxs),threshold,'ko')
-plot(t(good_idxs),threshold,'go')
-
-xlim(t([find(mask==1,1,'first') find(mask==1,1,'last')]))
+good_idxs = detectThresholdCrossings(yHiPass,fs,'show_plot',0);
 
 %% Create a click track
 
